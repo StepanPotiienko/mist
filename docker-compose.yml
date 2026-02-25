@@ -1,0 +1,20 @@
+services:
+  mist:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      # Persistent SQLite database — survives container rebuilds/updates
+      - mist-data:/data
+    env_file:
+      - .env.local
+    environment:
+      - DATABASE_URL=file:/data/mist.db
+      - OBSIDIAN_API_URL=http://host.docker.internal:27123
+    extra_hosts:
+      # Needed on Linux hosts (Docker Desktop on Mac handles this automatically)
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  mist-data:
