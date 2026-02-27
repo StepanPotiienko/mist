@@ -3,7 +3,7 @@ services:
     build: .
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "0.0.0.0:3131:3000"
     volumes:
       # Persistent SQLite database — survives container rebuilds/updates
       - mist-data:/data

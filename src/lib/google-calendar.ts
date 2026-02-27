@@ -22,9 +22,18 @@ export function getGoogleAuthUrl(): string {
 export async function exchangeCodeForTokens(code: string): Promise<Record<string, string>> {
   const oauth2 = buildOAuthClient()
   const { tokens } = await oauth2.getToken(code)
+  
+  let refreshToken = tokens.refresh_token ?? ""
+  if (!refreshToken) {
+    const existing = await getCredential("google")
+    if (existing?.refreshToken) {
+      refreshToken = existing.refreshToken
+    }
+  }
+
   return {
     accessToken: tokens.access_token ?? "",
-    refreshToken: tokens.refresh_token ?? "",
+    refreshToken: refreshToken,
     expiryDate: String(tokens.expiry_date ?? ""),
   }
 }
@@ -33,7 +42,9 @@ export async function getGoogleCalendarEvents(
   from: Date,
   to: Date
 ): Promise<UnifiedEvent[]> {
+  console.log("Fetching google calendar events. from:", from, "to:", to)
   const cred = await getCredential("google")
+  console.log("Loaded google credential:", cred ? "EXISTS" : "NULL", cred ? `refreshToken: ${!!cred.refreshToken}` : "")
   if (!cred?.refreshToken) return []
 
   const oauth2 = buildOAuthClient()
@@ -43,13 +54,10 @@ export async function getGoogleCalendarEvents(
     expiry_date: cred.expiryDate ? Number(cred.expiryDate) : undefined,
   })
 
-  // Auto-refresh if expired
-  const { credentials } = await oauth2.refreshAccessToken()
-  oauth2.setCredentials(credentials)
-
   const calendar = google.calendar({ version: "v3", auth: oauth2 })
 
-  const response = await calendar.events.list({
+  try {
+    const response = await calendar.events.list({
     calendarId: "primary",
     timeMin: from.toISOString(),
     timeMax: to.toISOString(),
@@ -76,4 +84,8 @@ export async function getGoogleCalendarEvents(
       sourceUrl: event.htmlLink ?? undefined,
     }
   })
+  } catch (err: any) {
+    console.error("Error fetching Google Calendar events:", err)
+    throw err
+  }
 }

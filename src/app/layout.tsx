@@ -18,6 +18,10 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Mist — Unified Productivity Dashboard",
   description: "Obsidian, Notion, and Calendar in one place.",
+  icons: {
+    icon: "/icon-1024.png",
+    apple: "/icon-1024.png",
+  },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

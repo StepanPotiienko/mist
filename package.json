@@ -28,6 +28,7 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-grid-layout": "^2.2.2",
+    "react-markdown": "^10.1.0",
     "recharts": "^3.7.0",
     "tailwind-merge": "^3.5.0",
     "tsdav": "^2.1.8",

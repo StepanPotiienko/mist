@@ -30,6 +30,7 @@ export function WidgetGrid({ pageSlug }: WidgetGridProps) {
   const pageWidgets = widgets[pageSlug] ?? []
   const { width, containerRef, mounted } = useContainerWidth({ initialWidth: 1200 })
 
+
   const [addOpen, setAddOpen] = useState(false)
   const [newType, setNewType] = useState<WidgetConfig["type"]>("notion-database")
   const [newTitle, setNewTitle] = useState("")
@@ -50,12 +51,15 @@ export function WidgetGrid({ pageSlug }: WidgetGridProps) {
     minH: 3,
   }))
 
-  const onLayoutChange = useCallback(
-    (newLayout: Layout) => {
+  // Use drag/resize STOP callbacks instead of onLayoutChange.
+  // onLayoutChange fires on mount with re-packed positions — overwriting what
+  // was saved. Stop callbacks only fire on actual user interaction.
+  const persistLayout = useCallback(
+    (layout: Layout) => {
+      const items = layout as LayoutItem[]
       const updated = pageWidgets.map((w) => {
-        const l = (newLayout as LayoutItem[]).find((n) => n.i === w.i)
-        if (!l) return w
-        return { ...w, x: l.x, y: l.y, w: l.w, h: l.h }
+        const l = items.find((n) => n.i === w.i)
+        return l ? { ...w, x: l.x, y: l.y, w: l.w, h: l.h } : w
       })
       setWidgets(pageSlug, updated)
     },
@@ -141,7 +145,8 @@ export function WidgetGrid({ pageSlug }: WidgetGridProps) {
           cols={{ lg: 12, md: 8, sm: 4 }}
           rowHeight={60}
           dragConfig={{ handle: ".drag-handle" }}
-          onLayoutChange={onLayoutChange}
+          onDragStop={(layout) => persistLayout(layout as Layout)}
+          onResizeStop={(layout) => persistLayout(layout as Layout)}
           margin={[12, 12]}
         >
           {pageWidgets.map((w) => (

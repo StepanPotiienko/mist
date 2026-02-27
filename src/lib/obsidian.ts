@@ -37,20 +37,29 @@ export async function isObsidianRunning(): Promise<boolean> {
 
 export async function listVaultFiles(): Promise<ObsidianVaultFile[]> {
   try {
-    console.log("Listing vault files...")
-    // In many cases /vault/ might just return root files. 
-    // If this fails or returns something unexpected, we handle it.
     const res = await obsidianFetch("/vault/")
     if (!res.ok) {
       const text = await res.text()
       console.error(`Obsidian API error listing files: ${res.status}`, text)
-      // Fallback: try to use search to find all md files if /vault/ fails
       return []
     }
     const data = await res.json() as any
-    const files = Array.isArray(data?.files) ? data.files : []
-    console.log(`Found ${files.length} items in vault root.`)
-    return files.filter((f: any) => f.extension === "md")
+    const rawFiles = Array.isArray(data?.files) ? data.files : []
+    console.log(`Found ${rawFiles.length} items in vault root. Sample:`, rawFiles.slice(0, 3))
+
+    // The Obsidian Local REST API returns files as plain strings (paths), not objects
+    return rawFiles
+      .filter((f: any) => {
+        if (typeof f === "string") return f.endsWith(".md")
+        return f.extension === "md"
+      })
+      .map((f: any): ObsidianVaultFile => {
+        if (typeof f === "string") {
+          const name = f.split("/").pop() ?? f
+          return { path: f, name, extension: "md", stat: { ctime: 0, mtime: 0, size: 0 } }
+        }
+        return f as ObsidianVaultFile
+      })
   } catch (err) {
     console.error("Failed to list vault files:", err)
     return []
@@ -111,49 +120,43 @@ export async function getNotesWithDates(
   from?: Date,
   to?: Date
 ): Promise<ObsidianNote[]> {
-  // Use search to find all MD files instead of just listing root vault
-  // An empty search query in simple search might not work, so we use a broad one or list items.
-  // For now, let's stick to listVaultFiles but make it non-throwing.
-  const allFiles = await listVaultFiles()
-  
-  // If we found nothing in root, try a simple search for ".md" or similar if possible
-  if (allFiles.length === 0) {
-    console.log("No files found in vault root, trying search fallback...")
-    // This is a common pattern to find all markdown files
-    return searchNotes("") 
+  // /vault/ only lists the ROOT directory, not subfolders — use search to get all notes
+  const notes = await searchNotes("")
+
+  const f = from && !isNaN(from.getTime()) ? from : undefined
+  const t = to && !isNaN(to.getTime()) ? to : undefined
+
+  if (!f && !t) return notes
+
+  return notes.filter((n) => {
+    if (!n.date) return false
+    if (f && n.date < f) return false
+    if (t && n.date > t) return false
+    return true
+  })
+}
+
+async function withConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>
+): Promise<PromiseSettledResult<R>[]> {
+  const results: PromiseSettledResult<R>[] = []
+  for (let i = 0; i < items.length; i += limit) {
+    const batch = items.slice(i, i + limit)
+    const batchResults = await Promise.allSettled(batch.map(fn))
+    results.push(...batchResults)
   }
-
-  const files = allFiles.slice(0, 100)
-  console.log(`Parsing ${files.length} notes...`)
-  const notes = await Promise.allSettled(files.map((f) => parseNote(f.path)))
-
-  return notes
-    .filter(
-      (r): r is PromiseFulfilledResult<ObsidianNote> =>
-        r.status === "fulfilled"
-    )
-    .map((r) => r.value)
-    .filter((n) => {
-      const f = from && !isNaN(from.getTime()) ? from : undefined
-      const t = to && !isNaN(to.getTime()) ? to : undefined
-
-      if (!f && !t) return true
-      if (!n.date) return false // Cannot filter by date if no date exists
-      const d = n.date
-      if (f && d < f) return false
-      if (t && d > t) return false
-      return true
-    })
+  return results
 }
 
 export async function searchNotes(query: string): Promise<ObsidianNote[]> {
   try {
     const isSpecialEmptySearch = !query || query.trim() === ""
     const searchString = isSpecialEmptySearch ? "*" : query
-    
+
     console.log(`Searching Obsidian with query param: "${searchString}"`)
 
-    // The error message 40090 specifically asked for '?query='
     const res = await obsidianFetch(`/search/simple/?query=${encodeURIComponent(searchString)}`, {
       method: "POST",
     })
@@ -165,7 +168,9 @@ export async function searchNotes(query: string): Promise<ObsidianNote[]> {
     }
     const data = await res.json() as Array<{ filename: string }>
     const limitedResults = data.slice(0, 100)
-    const notes = await Promise.allSettled(limitedResults.map((r) => parseNote(r.filename)))
+
+    // Fetch note contents 10 at a time to avoid overwhelming Obsidian's local server
+    const notes = await withConcurrency(limitedResults, 10, (r) => parseNote(r.filename))
     return notes
       .filter((r): r is PromiseFulfilledResult<ObsidianNote> => r.status === "fulfilled")
       .map((r) => r.value)

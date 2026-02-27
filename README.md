@@ -56,9 +56,7 @@ Credentials (Notion API key, Google OAuth tokens, Apple app-specific password, O
 | Concern | Library |
 |---|---|
 | Framework | Next.js 15 (App Router) + TypeScript |
-| Styling | Tailwind CSS v4 + shadcn/ui |
-| Client state | Zustand (with localStorage persistence) |
-| Data fetching | TanStack Query (React Query) |
+| Styling | Tailwind CSS v4 + shadcn/ui | | Client state | Zustand (with localStorage persistence) | | Data fetching | TanStack Query (React Query) |
 | Local database | Prisma v7 + SQLite (via `better-sqlite3`) |
 | Notion | `@notionhq/client` v5 |
 | Apple Calendar | `tsdav` (CalDAV / iCloud) |

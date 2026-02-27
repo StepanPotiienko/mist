@@ -63,81 +63,92 @@ export async function getAppleCalendarEvents(
   selectedCalendars?: string[]
 ): Promise<UnifiedEvent[]> {
   const cred = await getCredential("apple")
-  if (!cred?.username || !cred?.password) {
+  const username = cred?.username || process.env.APPLE_CALDAV_USERNAME || ""
+  const password = cred?.password || process.env.APPLE_CALENDAR_PASSWORD || ""
+  if (!username || !password) {
+    console.log("Apple Calendar: no credentials found (DB or env)")
     return []
   }
 
   const client = await createDAVClient({
     serverUrl: "https://caldav.icloud.com",
     credentials: {
-      username: cred.username,
-      password: cred.password,
+      username,
+      password,
     },
     authMethod: "Basic",
     defaultAccountType: "caldav",
   })
 
-  const calendars = await client.fetchCalendars()
-  const events: UnifiedEvent[] = []
+  const allCalendars = await client.fetchCalendars()
 
-  for (const calendar of calendars) {
-    if (selectedCalendars && selectedCalendars.length > 0) {
-      const name = typeof calendar.displayName === "string" ? calendar.displayName : ""
-      if (!selectedCalendars.includes(name)) continue
-    }
-    const objects: DAVObject[] = await client.fetchCalendarObjects({
-      calendar,
-      timeRange: {
-        start: from.toISOString(),
-        end: to.toISOString(),
-      },
-    })
+  const filteredCalendars = selectedCalendars && selectedCalendars.length > 0
+    ? allCalendars.filter((cal) => {
+        const name = typeof cal.displayName === "string" ? cal.displayName : ""
+        return selectedCalendars.includes(name)
+      })
+    : allCalendars
 
-    const rawColor = (calendar as { color?: unknown }).color
-    const calColor = typeof rawColor === "string" ? rawColor : "#FF3B30"
+  const perCalendarEvents = await Promise.all(
+    filteredCalendars.map(async (calendar) => {
+      const objects: DAVObject[] = await client.fetchCalendarObjects({
+        calendar,
+        timeRange: {
+          start: from.toISOString(),
+          end: to.toISOString(),
+        },
+      })
 
-    for (const obj of objects) {
-      if (!obj.data) continue
-      const ical = String(obj.data)
+      const rawColor = (calendar as { color?: unknown }).color
+      const calColor = typeof rawColor === "string" ? rawColor : "#FF3B30"
+      const calName = typeof calendar.displayName === "string" ? calendar.displayName : undefined
 
-      // A single .ics may have multiple VEVENT blocks
-      const eventBlocks = ical.match(/BEGIN:VEVENT[\s\S]*?END:VEVENT/g) ?? []
-      for (const block of eventBlocks) {
-        const parsed = parseVEvent(block)
-        if (!parsed?.dtstart) continue
-
-        const start = parseICalDate(parsed.dtstart)
-        const end = parsed.dtend ? parseICalDate(parsed.dtend) : undefined
-
-        events.push({
-          id: `apple-${parsed.uid ?? obj.url}`,
-          source: "apple",
-          title: parsed.summary ?? "No Title",
-          start,
-          end,
-          allDay: parsed.allDay ?? false,
-          color: calColor,
-          description: parsed.description,
-          location: parsed.location,
-          calendarName: typeof calendar.displayName === "string" ? calendar.displayName : undefined,
-        })
+      const events: UnifiedEvent[] = []
+      for (const obj of objects) {
+        if (!obj.data) continue
+        const ical = String(obj.data)
+        const eventBlocks = ical.match(/BEGIN:VEVENT[\s\S]*?END:VEVENT/g) ?? []
+        for (const block of eventBlocks) {
+          const parsed = parseVEvent(block)
+          if (!parsed?.dtstart) continue
+          const start = parseICalDate(parsed.dtstart)
+          const end = parsed.dtend ? parseICalDate(parsed.dtend) : undefined
+          events.push({
+            id: `apple-${parsed.uid ?? obj.url}`,
+            source: "apple",
+            title: parsed.summary ?? "No Title",
+            start,
+            end,
+            allDay: parsed.allDay ?? false,
+            color: calColor,
+            description: parsed.description,
+            location: parsed.location,
+            calendarName: calName,
+          })
+        }
       }
-    }
-  }
+      console.log(`Apple Calendar [${calName}]: ${objects.length} objects → ${events.length} events`)
+      return events
+    })
+  )
 
-  return events
+  const allEvents = perCalendarEvents.flat()
+  console.log(`Apple Calendar total: ${allEvents.length} events from ${filteredCalendars.length} calendars`)
+  return allEvents
 }
 export async function listAppleCalendars(): Promise<Array<{ id: string; name: string; color: string }>> {
   const cred = await getCredential("apple")
-  if (!cred?.username || !cred?.password) {
+  const username = cred?.username || process.env.APPLE_CALDAV_USERNAME || ""
+  const password = cred?.password || process.env.APPLE_CALENDAR_PASSWORD || ""
+  if (!username || !password) {
     return []
   }
 
   const client = await createDAVClient({
     serverUrl: "https://caldav.icloud.com",
     credentials: {
-      username: cred.username,
-      password: cred.password,
+      username,
+      password,
     },
     authMethod: "Basic",
     defaultAccountType: "caldav",

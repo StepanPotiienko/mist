@@ -3,7 +3,6 @@
 import { useState } from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { EventCard } from "./EventCard"
 import type { UnifiedEvent } from "@/types/calendar"
 
@@ -119,14 +118,9 @@ export function UnifiedCalendar({ events }: UnifiedCalendarProps) {
                 </p>
               </div>
               <div className="flex flex-col gap-0.5 min-h-[120px]">
-                {evts.slice(0, 5).map((e) => (
+                {evts.map((e) => (
                   <EventCard key={e.id} event={e} compact />
                 ))}
-                {evts.length > 5 && (
-                  <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4">
-                    +{evts.length - 5}
-                  </Badge>
-                )}
               </div>
             </div>
           )
@@ -161,7 +155,7 @@ export function UnifiedCalendar({ events }: UnifiedCalendarProps) {
         </div>
         <div className="grid grid-cols-7 gap-1">
           {cells.map((day, i) => {
-            if (!day) return <div key={i} className="h-24 rounded-lg" />
+            if (!day) return <div key={i} className="min-h-24 rounded-lg" />
             const evts = eventsForDay(day)
             const isToday = sameDay(day, today)
             const isCurrentMonth = day.getMonth() === cursor.getMonth()
@@ -169,7 +163,7 @@ export function UnifiedCalendar({ events }: UnifiedCalendarProps) {
             return (
               <div
                 key={i}
-                className={`h-24 rounded-lg border border-border p-1 overflow-hidden ${
+                className={`min-h-24 rounded-lg border border-border p-1 ${
                   isToday ? "border-primary/50 bg-primary/5" : ""
                 } ${!isCurrentMonth ? "opacity-40" : ""}`}
               >
@@ -183,14 +177,9 @@ export function UnifiedCalendar({ events }: UnifiedCalendarProps) {
                   {day.getDate()}
                 </p>
                 <div className="flex flex-col gap-0.5">
-                  {evts.slice(0, 3).map((e) => (
+                  {evts.map((e) => (
                     <EventCard key={e.id} event={e} compact />
                   ))}
-                  {evts.length > 3 && (
-                    <span className="text-[10px] text-muted-foreground px-1">
-                      +{evts.length - 3}
-                    </span>
-                  )}
                 </div>
               </div>
             )

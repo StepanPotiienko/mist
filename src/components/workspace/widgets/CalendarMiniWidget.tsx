@@ -22,7 +22,11 @@ export function CalendarMiniWidget({ title, onRemove }: CalendarMiniWidgetProps)
     queryKey: ["calendar", "apple", "widget"],
     queryFn: () =>
       fetch(`/api/calendar/apple?${params}`)
-        .then((r) => r.json() as Promise<{ events: UnifiedEvent[] }>)
+        .then(async (r) => {
+          const d = await r.json()
+          if (!r.ok) throw new Error(d.error || `HTTP error ${r.status}`)
+          return d as { events: UnifiedEvent[] }
+        })
         .then((d) => (d.events ?? []).map((e) => ({ ...e, start: new Date(e.start) }))),
   })
 
@@ -30,7 +34,11 @@ export function CalendarMiniWidget({ title, onRemove }: CalendarMiniWidgetProps)
     queryKey: ["calendar", "google", "widget"],
     queryFn: () =>
       fetch(`/api/calendar/google?${params}`)
-        .then((r) => r.json() as Promise<{ events: UnifiedEvent[] }>)
+        .then(async (r) => {
+          const d = await r.json()
+          if (!r.ok) throw new Error(d.error || `HTTP error ${r.status}`)
+          return d as { events: UnifiedEvent[] }
+        })
         .then((d) => (d.events ?? []).map((e) => ({ ...e, start: new Date(e.start) }))),
   })
 

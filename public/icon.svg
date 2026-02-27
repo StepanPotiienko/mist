@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <!-- Background: dark navy to near-black diagonal -->
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%"   stop-color="#131825"/>
+      <stop offset="100%" stop-color="#0a0c14"/>
+    </linearGradient>
+
+    <!-- Ambient corner glows (one per integration) -->
+    <radialGradient id="glowRed" cx="15%" cy="20%" r="45%">
+      <stop offset="0%"   stop-color="#FF3B30" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#FF3B30" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowBlue" cx="85%" cy="20%" r="45%">
+      <stop offset="0%"   stop-color="#1A73E8" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#1A73E8" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowPurple" cx="15%" cy="80%" r="45%">
+      <stop offset="0%"   stop-color="#7C3AED" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#7C3AED" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- M stroke gradient: Apple red → Google blue → Obsidian purple → Notion cream -->
+    <linearGradient id="mGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%"   stop-color="#FF6B5B"/>
+      <stop offset="30%"  stop-color="#4DA3FF"/>
+      <stop offset="65%"  stop-color="#9F6FFF"/>
+      <stop offset="100%" stop-color="#F5F0E8"/>
+    </linearGradient>
+
+    <!-- Soft mist glow on the M -->
+    <filter id="glow" x="-25%" y="-25%" width="150%" height="150%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="14" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+
+  <!-- Ambient integration colour glows -->
+  <rect width="1024" height="1024" fill="url(#glowRed)"/>
+  <rect width="1024" height="1024" fill="url(#glowBlue)"/>
+  <rect width="1024" height="1024" fill="url(#glowPurple)"/>
+
+  <!-- Bold M lettermark with misty gradient and glow -->
+  <path d="M 190,800 L 190,224 L 512,516 L 834,224 L 834,800"
+        stroke="url(#mGrad)"
+        stroke-width="96"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        fill="none"
+        filter="url(#glow)"/>
+</svg>
