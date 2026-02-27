@@ -12,6 +12,7 @@ export interface UnifiedEvent {
   location?: string
   sourceUrl?: string
   calendarName?: string
+  status?: string
   linkedIds?: string[]
 }
 

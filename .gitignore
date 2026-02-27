@@ -49,3 +49,8 @@ prisma/*.db
 
 # keep example env
 !.env.local.example
+
+.claude/
+
+*.db
+*.sqlite3

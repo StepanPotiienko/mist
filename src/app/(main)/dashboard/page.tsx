@@ -57,21 +57,33 @@ function useDashboardEvents() {
       }),
   })
 
+  const { data: notionData } = useQuery({
+    queryKey: ["calendar", "notion", "dashboard"],
+    queryFn: () =>
+      fetch(`/api/calendar/notion?${params}`).then(async (r) => {
+        if (!r.ok) return []
+        const d = await r.json() as { events?: unknown[] }
+        return (d.events ?? []) as UnifiedEvent[]
+      }),
+  })
+
   const allEvents: UnifiedEvent[] = [
     ...(appleData ?? []),
     ...(googleData ?? []),
     ...(obsidianData ?? []),
+    ...(notionData ?? []),
   ].map((e) => ({ ...e, start: new Date(e.start) }))
 
   return {
     events: allEvents,
     obsidianCount: (obsidianData ?? []).length,
-    isLoading: !appleData && !googleData && !obsidianData,
+    notionCount: (notionData ?? []).length,
+    isLoading: !appleData && !googleData && !obsidianData && !notionData,
   }
 }
 
 export default function DashboardPage() {
-  const { events, obsidianCount, isLoading } = useDashboardEvents()
+  const { events, obsidianCount, notionCount, isLoading } = useDashboardEvents()
 
   return (
     <div className="flex flex-col h-full">
@@ -89,7 +101,7 @@ export default function DashboardPage() {
           <StatsCards
             events={events}
             totalNotes={obsidianCount}
-            totalTasks={0}
+            totalTasks={notionCount}
           />
         )}
 

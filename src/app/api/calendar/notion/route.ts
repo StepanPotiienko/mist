@@ -39,6 +39,20 @@ export async function GET(req: NextRequest) {
 
           for (const entry of entries) {
             if (!entry.date) continue
+
+            let status: string | undefined
+            for (const prop of Object.values(entry.properties)) {
+              const p = prop as Record<string, unknown>
+              if (p.type === "status" && (p.status as Record<string, string>)?.name) {
+                status = (p.status as Record<string, string>).name
+                break
+              }
+              if (p.type === "select" && (p.select as Record<string, string>)?.name) {
+                status = (p.select as Record<string, string>).name
+                break
+              }
+            }
+
             events.push({
               id: `notion-${entry.id}`,
               source: "notion",
@@ -49,6 +63,7 @@ export async function GET(req: NextRequest) {
               color: "#000000",
               sourceUrl: entry.url,
               calendarName: db.title,
+              status,
             })
           }
         } catch {
