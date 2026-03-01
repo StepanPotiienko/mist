@@ -30,10 +30,17 @@ function formatDateRange(event: UnifiedEvent): string {
       year: "numeric",
     })
     if (event.end) {
-      // iCal all-day end is exclusive — subtract 1 day for display
       const endAdj = new Date(event.end)
-      endAdj.setDate(endAdj.getDate() - 1)
-      if (endAdj.getTime() > event.start.getTime()) {
+      if (event.endIsExclusive !== false) {
+        // iCal all-day end is exclusive (day-after-last) — subtract 1 for display
+        endAdj.setDate(endAdj.getDate() - 1)
+      }
+      // Only show a range if end is actually a different day from start
+      if (
+        endAdj.getFullYear() !== event.start.getFullYear() ||
+        endAdj.getMonth() !== event.start.getMonth() ||
+        endAdj.getDate() !== event.start.getDate()
+      ) {
         const endStr = endAdj.toLocaleDateString("en-US", {
           weekday: "long",
           month: "long",

@@ -38,6 +38,31 @@ function sameDay(a: Date, b: Date): boolean {
   )
 }
 
+/** Convert a Date to a comparable integer (YYYYMMDD) using local time. */
+function toDateNum(d: Date): number {
+  return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate()
+}
+
+/**
+ * Returns true if `event` spans (or falls on) `day`.
+ * Handles both iCal-style exclusive end dates (e.g. Apple/Google) and
+ * Notion-style inclusive end dates.
+ */
+function eventCoversDay(event: UnifiedEvent, day: Date): boolean {
+  const start = new Date(event.start)
+  const dayNum = toDateNum(day)
+  if (toDateNum(start) > dayNum) return false
+
+  if (!event.end) return toDateNum(start) === dayNum
+
+  const end = new Date(event.end)
+  if (event.endIsExclusive !== false) {
+    // iCal convention: end is the day AFTER the last day → subtract 1
+    end.setDate(end.getDate() - 1)
+  }
+  return toDateNum(end) >= dayNum
+}
+
 export function UnifiedCalendar({ events }: UnifiedCalendarProps) {
   const [view, setView] = useState<ViewMode>("week")
   const [cursor, setCursor] = useState(new Date())
@@ -72,8 +97,8 @@ export function UnifiedCalendar({ events }: UnifiedCalendarProps) {
 
   function eventsForDay(d: Date): UnifiedEvent[] {
     return events
-      .filter((e) => sameDay(new Date(e.start), d))
-      .sort((a, b) => (a.allDay ? -1 : 1) - (b.allDay ? -1 : 1) || a.start.getTime() - b.start.getTime())
+      .filter((e) => eventCoversDay(e, d))
+      .sort((a, b) => (a.allDay ? -1 : 1) - (b.allDay ? -1 : 1) || new Date(a.start).getTime() - new Date(b.start).getTime())
   }
 
   // ── Day View ──────────────────────────────────────────────────────────────
@@ -100,31 +125,62 @@ export function UnifiedCalendar({ events }: UnifiedCalendarProps) {
     })
     const today = new Date()
 
+    // Partition into spanning (2+ days visible this week) vs single-day
+    interface SpanInfo { event: UnifiedEvent; colStart: number; colSpan: number }
+    const spanning: SpanInfo[] = []
+    const perDay: UnifiedEvent[][] = days.map(() => [])
+
+    for (const event of events) {
+      const covered = days.reduce<number[]>((acc, d, i) => {
+        if (eventCoversDay(event, d)) acc.push(i)
+        return acc
+      }, [])
+      if (covered.length > 1) {
+        spanning.push({ event, colStart: covered[0] + 1, colSpan: covered.length })
+      } else if (covered.length === 1) {
+        perDay[covered[0]].push(event)
+      }
+    }
+    for (const arr of perDay) {
+      arr.sort((a, b) => (a.allDay ? -1 : 1) - (b.allDay ? -1 : 1) || new Date(a.start).getTime() - new Date(b.start).getTime())
+    }
+
     return (
-      <div className="grid grid-cols-7 gap-1 pt-2">
-        {days.map((day, i) => {
-          const evts = eventsForDay(day)
-          const isToday = sameDay(day, today)
-          return (
-            <div key={i} className="flex flex-col">
-              <div
-                className={`mb-1 rounded-md py-1 text-center ${isToday ? "bg-primary/10" : ""}`}
-              >
+      <div className="pt-2 flex flex-col gap-1">
+        {/* Day headers */}
+        <div className="grid grid-cols-7 gap-1">
+          {days.map((day, i) => {
+            const isToday = sameDay(day, today)
+            return (
+              <div key={i} className={`rounded-md py-1 text-center ${isToday ? "bg-primary/10" : ""}`}>
                 <p className="text-[11px] text-muted-foreground">{DAYS[day.getDay()]}</p>
-                <p
-                  className={`text-sm font-semibold ${isToday ? "flex h-6 w-6 mx-auto items-center justify-center rounded-full bg-primary text-primary-foreground text-xs" : ""}`}
-                >
+                <p className={`text-sm font-semibold ${isToday ? "flex h-6 w-6 mx-auto items-center justify-center rounded-full bg-primary text-primary-foreground text-xs" : ""}`}>
                   {day.getDate()}
                 </p>
               </div>
-              <div className="flex flex-col gap-0.5 min-h-[120px]">
-                {evts.map((e) => (
-                  <EventCard key={e.id} event={e} compact />
-                ))}
-              </div>
+            )
+          })}
+        </div>
+
+        {/* Spanning multi-day events — one grid row per event */}
+        {spanning.map(({ event, colStart, colSpan }) => (
+          <div key={event.id} className="grid grid-cols-7 gap-1">
+            <div style={{ gridColumn: `${colStart} / span ${colSpan}` }}>
+              <EventCard event={event} compact />
             </div>
-          )
-        })}
+          </div>
+        ))}
+
+        {/* Single-day events per column */}
+        <div className="grid grid-cols-7 gap-1">
+          {days.map((_, i) => (
+            <div key={i} className="flex flex-col gap-0.5 min-h-[120px]">
+              {perDay[i].map((e) => (
+                <EventCard key={e.id} event={e} compact />
+              ))}
+            </div>
+          ))}
+        </div>
       </div>
     )
   }
@@ -136,16 +192,20 @@ export function UnifiedCalendar({ events }: UnifiedCalendarProps) {
     const daysInMonth = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate()
     const today = new Date()
 
-    // Pad beginning
+    // Build padded cell array, then slice into week rows
     const cells: Array<Date | null> = Array(firstDow).fill(null)
     for (let d = 1; d <= daysInMonth; d++) {
       cells.push(new Date(cursor.getFullYear(), cursor.getMonth(), d))
     }
-    // Pad end to multiple of 7
     while (cells.length % 7 !== 0) cells.push(null)
+    const weeks: Array<Array<Date | null>> = []
+    for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7))
+
+    interface SpanInfo { event: UnifiedEvent; colStart: number; colSpan: number }
 
     return (
       <div className="pt-2">
+        {/* Day-name headers */}
         <div className="grid grid-cols-7 gap-1 mb-1">
           {DAYS.map((d) => (
             <div key={d} className="text-center text-[11px] font-medium text-muted-foreground pb-1">
@@ -153,33 +213,67 @@ export function UnifiedCalendar({ events }: UnifiedCalendarProps) {
             </div>
           ))}
         </div>
-        <div className="grid grid-cols-7 gap-1">
-          {cells.map((day, i) => {
-            if (!day) return <div key={i} className="min-h-24 rounded-lg" />
-            const evts = eventsForDay(day)
-            const isToday = sameDay(day, today)
-            const isCurrentMonth = day.getMonth() === cursor.getMonth()
+
+        {/* Week rows */}
+        <div className="flex flex-col gap-1">
+          {weeks.map((week, wi) => {
+            // Spanning events visible in this week (cover 2+ of this week's days)
+            const spanning: SpanInfo[] = []
+            for (const event of events) {
+              const covered = week.reduce<number[]>((acc, d, i) => {
+                if (d && eventCoversDay(event, d)) acc.push(i)
+                return acc
+              }, [])
+              if (covered.length > 1) {
+                spanning.push({ event, colStart: covered[0] + 1, colSpan: covered.length })
+              }
+            }
 
             return (
-              <div
-                key={i}
-                className={`min-h-24 rounded-lg border border-border p-1 ${
-                  isToday ? "border-primary/50 bg-primary/5" : ""
-                } ${!isCurrentMonth ? "opacity-40" : ""}`}
-              >
-                <p
-                  className={`text-xs font-medium mb-0.5 leading-none ${
-                    isToday
-                      ? "flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px]"
-                      : "text-muted-foreground"
-                  }`}
-                >
-                  {day.getDate()}
-                </p>
-                <div className="flex flex-col gap-0.5">
-                  {evts.map((e) => (
-                    <EventCard key={e.id} event={e} compact />
-                  ))}
+              <div key={wi} className="flex flex-col gap-0.5">
+                {/* Spanning blocks */}
+                {spanning.map(({ event, colStart, colSpan }) => (
+                  <div key={event.id} className="grid grid-cols-7 gap-1">
+                    <div style={{ gridColumn: `${colStart} / span ${colSpan}` }}>
+                      <EventCard event={event} compact />
+                    </div>
+                  </div>
+                ))}
+
+                {/* Day cells — single-day events only */}
+                <div className="grid grid-cols-7 gap-1">
+                  {week.map((day, di) => {
+                    if (!day) return <div key={di} className="min-h-16 rounded-lg" />
+                    const isToday = sameDay(day, today)
+                    const isCurrentMonth = day.getMonth() === cursor.getMonth()
+                    // Only events that cover exactly 1 day in this week row
+                    const singleEvts = events.filter((e) => {
+                      if (!eventCoversDay(e, day)) return false
+                      const weekCoverage = week.filter((d) => d && eventCoversDay(e, d)).length
+                      return weekCoverage <= 1
+                    })
+                    singleEvts.sort((a, b) => (a.allDay ? -1 : 1) - (b.allDay ? -1 : 1) || new Date(a.start).getTime() - new Date(b.start).getTime())
+
+                    return (
+                      <div
+                        key={di}
+                        className={`min-h-16 rounded-lg border border-border p-1 ${
+                          isToday ? "border-primary/50 bg-primary/5" : ""
+                        } ${!isCurrentMonth ? "opacity-40" : ""}`}
+                      >
+                        <p className={`text-xs font-medium mb-0.5 leading-none ${
+                          isToday
+                            ? "flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px]"
+                            : "text-muted-foreground"
+                        }`}>
+                          {day.getDate()}
+                        </p>
+                        <div className="flex flex-col gap-0.5">
+                          {singleEvts.map((e) => <EventCard key={e.id} event={e} compact />)}
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
             )

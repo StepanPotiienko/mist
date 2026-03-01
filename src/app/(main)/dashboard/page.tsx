@@ -72,7 +72,11 @@ function useDashboardEvents() {
     ...(googleData ?? []),
     ...(obsidianData ?? []),
     ...(notionData ?? []),
-  ].map((e) => ({ ...e, start: new Date(e.start) }))
+  ].map((e) => ({
+    ...e,
+    start: new Date(e.start),
+    end: e.end ? new Date(e.end as unknown as string) : undefined,
+  }))
 
   return {
     events: allEvents,

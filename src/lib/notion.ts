@@ -63,12 +63,33 @@ export async function queryDatabase(
 
       let date: Date | undefined
       let dateEnd: Date | undefined
-      for (const prop of Object.values(page.properties)) {
-        if (prop.type === "date" && prop.date?.start) {
-          date = new Date(prop.date.start)
-          if (prop.date.end) dateEnd = new Date(prop.date.end)
-          break
-        }
+
+      // Collect all date properties that have a value. Use entries so we have the property name.
+      type DateEntry = { name: string; start: string; end?: string | null }
+      const dateEntries: DateEntry[] = Object.entries(page.properties)
+        .filter(([, p]) => p.type === "date" && !!(p as { date?: { start?: string } }).date?.start)
+        .map(([name, p]) => {
+          const d = (p as { date: { start: string; end?: string | null } }).date
+          return { name, start: d.start, end: d.end }
+        })
+
+      if (dateEntries.length === 1) {
+        date = new Date(dateEntries[0].start)
+        if (dateEntries[0].end) dateEnd = new Date(dateEntries[0].end)
+      } else if (dateEntries.length > 1) {
+        // Multiple date properties: heuristic to find which is start and which is end
+        const nameIncludes = (keywords: string[], name: string) =>
+          keywords.some((k) => name.toLowerCase().includes(k))
+        const startEntry =
+          dateEntries.find((e) => nameIncludes(["start", "begin", "from"], e.name)) ??
+          dateEntries.find((e) => nameIncludes(["date"], e.name)) ??
+          dateEntries[0]
+        const endEntry = dateEntries.find(
+          (e) => e !== startEntry && nameIncludes(["end", "finish", "to", "due", "deadline"], e.name)
+        )
+        date = new Date(startEntry.start)
+        if (startEntry.end) dateEnd = new Date(startEntry.end)
+        if (!dateEnd && endEntry) dateEnd = new Date(endEntry.start)
       }
 
       return {

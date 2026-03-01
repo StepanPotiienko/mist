@@ -6,6 +6,8 @@ export interface UnifiedEvent {
   title: string
   start: Date
   end?: Date
+  /** true = iCal/Google convention (end is day-after-last), false = Notion convention (end is the last day, inclusive) */
+  endIsExclusive?: boolean
   allDay: boolean
   color: string
   description?: string
