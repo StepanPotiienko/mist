@@ -131,7 +131,7 @@ docker compose up -d --build
 
 The first build takes ~3 minutes (it compiles `better-sqlite3` from source). Subsequent starts are near-instant.
 
-Open [http://localhost:3000](http://localhost:3000).
+Open [http://localhost:3131](http://localhost:3131).
 
 ### 3. Day-to-day commands
 
@@ -168,7 +168,187 @@ docker run --rm \
 
 ---
 
-## ⚙️ Configuration
+## 📱 Multi-Device & Remote Access
+
+The default setup runs on your Mac and is only reachable at `localhost`. This section covers how to move the container to an always-on device (like a Raspberry Pi) so you can access Mist from your iPad, iPhone, or any browser — without your MacBook needing to be open.
+
+### Architecture overview
+
+```
+┌──────────────┐        ┌─────────────────────────┐
+│  iPad / any  │◄──────►│   Raspberry Pi / server  │
+│   browser    │  local │   Docker container       │
+└──────────────┘  or VPN│   :3131                  │
+                        └─────────────────────────┘
+                                    ▲
+                                    │ (optional, same LAN or Tailscale)
+                                    ▼
+                        ┌─────────────────────────┐
+                        │   MacBook (Obsidian)     │
+                        │   :27123 REST API plugin │
+                        └─────────────────────────┘
+```
+
+---
+
+### Option A — Access on your local network (LAN)
+
+If all your devices are on the same Wi-Fi, this is the simplest path.
+
+1. Find your Mac or Pi's LAN IP:
+   ```bash
+   # macOS
+   ipconfig getifaddr en0
+   # Linux / Raspberry Pi
+   hostname -I | awk '{print $1}'
+   ```
+
+2. In `.env.local`, set `BASE_URL` to that IP on port 3131 and update the dependent vars:
+   ```env
+   BASE_URL=http://192.168.1.100:3131
+   NEXTAUTH_URL=http://192.168.1.100:3131
+   GOOGLE_REDIRECT_URI=http://192.168.1.100:3131/api/auth/google
+   NOTION_REDIRECT_URI=http://192.168.1.100:3131/api/auth/notion
+   ```
+
+3. Update the **Authorized Redirect URI** in Google Cloud Console to match `GOOGLE_REDIRECT_URI`.
+
+4. Rebuild and restart:
+   ```bash
+   docker compose up -d --build
+   ```
+
+5. Open `http://192.168.1.100:3131` from any device on the network.
+
+> **Limitation:** LAN access only works when all devices are on the same network. Use Option B for true remote access.
+
+---
+
+### Option B — Raspberry Pi + Tailscale (recommended for remote access)
+
+[Tailscale](https://tailscale.com) creates an encrypted private network between all your devices with zero port-forwarding or router configuration. It is free for personal use.
+
+#### 1. Set up Tailscale
+
+```bash
+# On your Raspberry Pi
+curl -fsSL https://tailscale.com/install.sh | sh
+sudo tailscale up
+
+# On your Mac
+# Download from https://tailscale.com/download
+
+# On your iPad
+# Install Tailscale from the App Store
+```
+
+After connecting all devices, each gets a stable Tailscale IP (e.g. `100.64.0.x`). Find the Pi's address in the Tailscale admin console or:
+```bash
+tailscale ip -4   # run on the Pi
+```
+
+#### 2. Build Mist on the Pi
+
+```bash
+# SSH into the Pi and clone or copy the repo
+ssh pi@<pi-tailscale-ip>
+git clone <your-repo-url> && cd mist
+cp .env.local.example .env.local
+```
+
+#### 3. Configure `.env.local` on the Pi
+
+```env
+BASE_URL=http://100.64.0.x:3131          # Pi's Tailscale IP
+NEXTAUTH_URL=http://100.64.0.x:3131
+GOOGLE_REDIRECT_URI=http://100.64.0.x:3131/api/auth/google
+NOTION_REDIRECT_URI=http://100.64.0.x:3131/api/auth/notion
+```
+
+Update the Authorized Redirect URI in Google Cloud Console to match.
+
+#### 4. Configure the Obsidian URL (if Obsidian stays on your Mac)
+
+The Pi's container cannot reach `host.docker.internal` to talk to Obsidian on your Mac. Instead, create a Docker Compose `.env` file on the Pi (this is separate from `.env.local`) so the compose file can substitute the correct URL:
+
+```bash
+# On the Pi, in the mist/ directory
+echo "OBSIDIAN_API_URL=http://100.64.0.mac:27123" > .env
+```
+
+Replace `100.64.0.mac` with your Mac's Tailscale IP. Obsidian's Local REST API plugin must be running and have **Allow non-local requests** checked in its settings.
+
+#### 5. Start the container
+
+```bash
+docker compose up -d --build
+```
+
+Open `http://100.64.0.x:3131` from any Tailscale-connected device — Mac, iPad, iPhone, or another computer.
+
+---
+
+### Building for Raspberry Pi (ARM64)
+
+The `node:22-alpine` base image is multi-architecture, so the simplest approach is to build directly on the Pi:
+
+```bash
+ssh pi@<pi-ip> "cd mist && docker compose up -d --build"
+```
+
+If you prefer to cross-compile from your Mac (takes longer due to QEMU emulation):
+
+```bash
+# Install QEMU emulators once
+docker run --privileged --rm tonistiigi/binfmt --install all
+
+# Build for arm64 and load into local Docker
+docker buildx build --platform linux/arm64 -t mist --load .
+```
+
+---
+
+### Option C — HTTPS with a reverse proxy (for public or strict-OAuth deployments)
+
+Google OAuth requires HTTPS for redirect URIs that are not `localhost`. If you want a clean domain name or need HTTPS, add a Caddy reverse proxy.
+
+1. Point a domain at your server's IP (or use Tailscale + a custom domain via Tailscale HTTPS certificates).
+
+2. Create a `Caddyfile` alongside `docker-compose.yml`:
+   ```
+   mist.yourdomain.com {
+       reverse_proxy mist:3000
+   }
+   ```
+
+3. Add Caddy to `docker-compose.yml`:
+   ```yaml
+   services:
+     mist:
+       # ... existing config unchanged ...
+
+     caddy:
+       image: caddy:2-alpine
+       restart: unless-stopped
+       ports:
+         - "80:80"
+         - "443:443"
+       volumes:
+         - ./Caddyfile:/etc/caddy/Caddyfile
+         - caddy-data:/data
+       depends_on:
+         - mist
+
+   volumes:
+     mist-data:
+     caddy-data:
+   ```
+
+4. Set `BASE_URL=https://mist.yourdomain.com` and update all redirect URIs accordingly.
+
+Caddy handles TLS certificate provisioning automatically via Let's Encrypt.
+
+---
 
 All configuration lives in `.env.local`. The Docker container reads this file automatically via `env_file`.
 
@@ -204,13 +384,14 @@ After connecting, add a **Notion Database** widget in the Workspace tab and past
 2. **APIs & Services → Library** → search for and enable **Google Calendar API**
 3. **APIs & Services → Credentials → Create Credentials → OAuth 2.0 Client ID**
    - Application type: **Web application**
-   - Authorized redirect URI: `http://localhost:3000/api/auth/google`
+   - Authorized redirect URI: `http://localhost:3131/api/auth/google` (local Docker)
+   - Add additional URIs for each deployment target (e.g. your Pi's IP or Tailscale address)
 4. Copy the **Client ID** and **Client Secret**
 
 ```env
 GOOGLE_CLIENT_ID=xxxxxxxx.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=GOCSPX-xxxxxxxx
-GOOGLE_REDIRECT_URI=http://localhost:3000/api/auth/google
+GOOGLE_REDIRECT_URI=http://localhost:3131/api/auth/google
 ```
 
 Then in the app: **Settings → Google Calendar → Connect** — this opens the Google OAuth consent screen. After approving, tokens are stored encrypted in SQLite and refreshed automatically.
@@ -362,8 +543,9 @@ Most common cause: `ENCRYPTION_KEY` in `.env.local` is still the placeholder val
 
 **Google Calendar shows "Not connected" after the OAuth flow**
 
-- Check that `GOOGLE_REDIRECT_URI` in `.env.local` exactly matches the redirect URI registered in Google Cloud Console (including the `http://` and no trailing slash)
-- If running in Docker, the browser redirect still hits `http://localhost:3000` (the port is forwarded from the container), so the redirect URI stays the same
+- Check that `GOOGLE_REDIRECT_URI` in `.env.local` exactly matches the redirect URI registered in Google Cloud Console (including the scheme, host, port, and no trailing slash)
+- When running in Docker, the redirect URI must use port 3131 (e.g. `http://localhost:3131/api/auth/google`), not the internal container port 3000
+- For remote deployments, the redirect URI must use the public URL — update both `.env.local` and the Google Cloud Console entry together
 
 ---
 

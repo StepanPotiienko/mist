@@ -1,3 +1,14 @@
+# ── Multi-platform support ────────────────────────────────────────────────────
+# Build for the target architecture (linux/amd64 or linux/arm64).
+# To cross-compile from a Mac/x86 host for Raspberry Pi (arm64), install the
+# Docker Buildx QEMU emulator and run:
+#   docker buildx create --use
+#   docker buildx build --platform linux/arm64 -t mist --load .
+# Building natively on the Pi is faster and simpler for personal deployments:
+#   ssh pi@<pi-ip> "cd mist && docker compose up -d --build"
+ARG TARGETPLATFORM
+ARG BUILDPLATFORM
+
 # ── Stage 1: Install dependencies ─────────────────────────────────────────────
 FROM node:22-alpine AS deps
 

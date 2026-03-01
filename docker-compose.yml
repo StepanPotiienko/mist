@@ -11,7 +11,13 @@ services:
       - .env.local
     environment:
       - DATABASE_URL=file:/data/mist.db
-      - OBSIDIAN_API_URL=http://host.docker.internal:27123
+      # Points the container at the Obsidian Local REST API plugin.
+      # Default: host.docker.internal resolves to the machine running this container.
+      # Override in a Docker Compose .env file when Obsidian runs on a different
+      # machine (e.g. your Mac while this container runs on a Raspberry Pi):
+      #   OBSIDIAN_API_URL=http://192.168.1.5:27123
+      #   OBSIDIAN_API_URL=http://100.64.0.5:27123   # via Tailscale
+      - OBSIDIAN_API_URL=${OBSIDIAN_API_URL:-http://host.docker.internal:27123}
     extra_hosts:
       # Needed on Linux hosts (Docker Desktop on Mac handles this automatically)
       - "host.docker.internal:host-gateway"
