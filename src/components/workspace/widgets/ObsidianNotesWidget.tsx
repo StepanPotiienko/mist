@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
+import { useObsidianSync } from "@/hooks/useObsidianSync"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
@@ -25,6 +26,8 @@ export function ObsidianNotesWidget({
   onRemove,
 }: ObsidianNotesWidgetProps) {
   const [selectedEntry, setSelectedEntry] = useState<WidgetEntry | null>(null)
+
+  useObsidianSync()
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["obsidian", "notes", "widget", tag],
@@ -56,7 +59,7 @@ export function ObsidianNotesWidget({
         )}
         {(error || data?.error) && (
           <p className="text-xs text-muted-foreground text-center py-4">
-            {data?.error ?? "Could not connect to Obsidian. Make sure the Local REST API plugin is running."}
+            {data?.error ?? "Could not load notes. Check your Obsidian settings."}
           </p>
         )}
         {data?.notes && (
@@ -86,7 +89,7 @@ export function ObsidianNotesWidget({
             ))}
             {data.notes.length === 0 && (
               <p className="text-xs text-muted-foreground text-center py-4">
-                No notes with dates found.
+                No notes found.
               </p>
             )}
           </div>

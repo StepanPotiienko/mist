@@ -101,7 +101,6 @@ export function UnifiedCalendar({ events }: UnifiedCalendarProps) {
       .sort((a, b) => (a.allDay ? -1 : 1) - (b.allDay ? -1 : 1) || new Date(a.start).getTime() - new Date(b.start).getTime())
   }
 
-  // ── Day View ──────────────────────────────────────────────────────────────
   function renderDay() {
     const dayEvts = eventsForDay(cursor)
     return (
@@ -115,7 +114,6 @@ export function UnifiedCalendar({ events }: UnifiedCalendarProps) {
     )
   }
 
-  // ── Week View ─────────────────────────────────────────────────────────────
   function renderWeek() {
     const ws = startOfWeek(cursor)
     const days = Array.from({ length: 7 }, (_, i) => {
@@ -185,7 +183,6 @@ export function UnifiedCalendar({ events }: UnifiedCalendarProps) {
     )
   }
 
-  // ── Month View ────────────────────────────────────────────────────────────
   function renderMonth() {
     const ms = startOfMonth(cursor)
     const firstDow = ms.getDay()

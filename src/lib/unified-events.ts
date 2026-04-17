@@ -66,14 +66,17 @@ export async function fetchUnifiedEvents(
 
   if (enabled.obsidian) {
     tasks.push(
-      import("./obsidian")
-        .then(async (m) => {
-          const notes = await m.getNotesWithDates(from, to)
-          return notes.map((n): UnifiedEvent => ({
+      fetch(
+        `/api/obsidian/notes?from=${from.toISOString()}&to=${to.toISOString()}`
+      )
+        .then(async (r) => {
+          if (!r.ok) return []
+          const d = await r.json() as { notes?: Array<{ path: string; title: string; date?: string }> }
+          return (d.notes ?? []).map((n): UnifiedEvent => ({
             id: `obsidian-${n.path}`,
             source: "obsidian",
             title: n.title,
-            start: n.date!,
+            start: new Date(n.date ?? 0),
             allDay: true,
             color: SOURCE_COLORS.obsidian,
           }))

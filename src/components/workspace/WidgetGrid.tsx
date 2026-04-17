@@ -1,45 +1,68 @@
-"use client"
+"use client";
 
-import { useState, useCallback } from "react"
-import { useQuery } from "@tanstack/react-query"
-import { Responsive, useContainerWidth, type LayoutItem, type Layout } from "react-grid-layout"
-import "react-grid-layout/css/styles.css"
-import { Plus } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useWorkspace, type WidgetConfig } from "@/stores/workspace"
-import { NotionDatabaseWidget } from "./widgets/NotionDatabaseWidget"
-import { ObsidianNotesWidget } from "./widgets/ObsidianNotesWidget"
-import { CalendarMiniWidget } from "./widgets/CalendarMiniWidget"
+import { useState, useCallback, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import {
+  Responsive,
+  useContainerWidth,
+  type LayoutItem,
+  type Layout,
+} from "react-grid-layout";
+import "react-grid-layout/css/styles.css";
+import { Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useWorkspace, type WidgetConfig } from "@/stores/workspace";
+import { NotionDatabaseWidget } from "./widgets/NotionDatabaseWidget";
+import { ObsidianNotesWidget } from "./widgets/ObsidianNotesWidget";
+import { CalendarMiniWidget } from "./widgets/CalendarMiniWidget";
+import type { NotionDatabase } from "@/types/notion";
 
 interface WidgetGridProps {
-  pageSlug: string
+  pageSlug: string;
 }
 
 const WIDGET_TYPES = [
   { value: "notion-database", label: "Notion Database" },
   { value: "obsidian-notes", label: "Obsidian Notes" },
   { value: "calendar-mini", label: "Calendar" },
-]
+];
 
 export function WidgetGrid({ pageSlug }: WidgetGridProps) {
-  const { widgets, setWidgets, addWidget, removeWidget, updateWidget } = useWorkspace()
-  const pageWidgets = widgets[pageSlug] ?? []
-  const { width, containerRef, mounted } = useContainerWidth({ initialWidth: 1200 })
+  const { widgets, setWidgets, addWidget, removeWidget, updateWidget } =
+    useWorkspace();
+  const pageWidgets = useMemo(
+    () => widgets[pageSlug] ?? [],
+    [widgets, pageSlug],
+  );
+  const { width, containerRef, mounted } = useContainerWidth({
+    initialWidth: 1200,
+  });
 
-
-  const [addOpen, setAddOpen] = useState(false)
-  const [newType, setNewType] = useState<WidgetConfig["type"]>("notion-database")
-  const [newTitle, setNewTitle] = useState("")
-  const [newConfig, setNewConfig] = useState<Record<string, string>>({})
+  const [addOpen, setAddOpen] = useState(false);
+  const [newType, setNewType] =
+    useState<WidgetConfig["type"]>("notion-database");
+  const [newTitle, setNewTitle] = useState("");
+  const [newConfig, setNewConfig] = useState<Record<string, string>>({});
   const { data: databasesData, isLoading: isLoadingDatabases } = useQuery({
     queryKey: ["notion", "databases"],
     queryFn: () => fetch("/api/notion/databases").then((r) => r.json()),
     enabled: addOpen && newType === "notion-database",
-  })
+  });
 
   const layoutItems: LayoutItem[] = pageWidgets.map((w) => ({
     i: w.i,
@@ -49,25 +72,25 @@ export function WidgetGrid({ pageSlug }: WidgetGridProps) {
     h: w.h,
     minW: 2,
     minH: 3,
-  }))
+  }));
 
   // Use drag/resize STOP callbacks instead of onLayoutChange.
   // onLayoutChange fires on mount with re-packed positions — overwriting what
   // was saved. Stop callbacks only fire on actual user interaction.
   const persistLayout = useCallback(
     (layout: Layout) => {
-      const items = layout as LayoutItem[]
+      const items = layout as LayoutItem[];
       const updated = pageWidgets.map((w) => {
-        const l = items.find((n) => n.i === w.i)
-        return l ? { ...w, x: l.x, y: l.y, w: l.w, h: l.h } : w
-      })
-      setWidgets(pageSlug, updated)
+        const l = items.find((n) => n.i === w.i);
+        return l ? { ...w, x: l.x, y: l.y, w: l.w, h: l.h } : w;
+      });
+      setWidgets(pageSlug, updated);
     },
-    [pageWidgets, pageSlug, setWidgets]
-  )
+    [pageWidgets, pageSlug, setWidgets],
+  );
 
   function handleAddWidget() {
-    if (!newTitle.trim()) return
+    if (!newTitle.trim()) return;
     const widget: WidgetConfig = {
       i: `widget-${Date.now()}`,
       x: 0,
@@ -77,20 +100,21 @@ export function WidgetGrid({ pageSlug }: WidgetGridProps) {
       type: newType,
       title: newTitle,
       config: newConfig,
-    }
-    addWidget(pageSlug, widget)
-    setAddOpen(false)
-    setNewTitle("")
-    setNewConfig({})
+    };
+    addWidget(pageSlug, widget);
+    setAddOpen(false);
+    setNewTitle("");
+    setNewConfig({});
   }
 
   function renderWidget(w: WidgetConfig) {
     const common = {
       title: w.title,
       view: w.view,
-      onViewChange: (view: "list" | "compact" | "calendar") => updateWidget(pageSlug, w.i, { view }),
+      onViewChange: (view: "list" | "compact" | "calendar") =>
+        updateWidget(pageSlug, w.i, { view }),
       onRemove: () => removeWidget(pageSlug, w.i),
-    }
+    };
 
     switch (w.type) {
       case "notion-database":
@@ -99,18 +123,22 @@ export function WidgetGrid({ pageSlug }: WidgetGridProps) {
             {...common}
             databaseId={(w.config.databaseId as string) ?? ""}
           />
-        )
+        );
       case "obsidian-notes":
         return (
           <ObsidianNotesWidget
             {...common}
             tag={w.config.tag as string | undefined}
           />
-        )
+        );
       case "calendar-mini":
-        return <CalendarMiniWidget {...common} />
+        return <CalendarMiniWidget {...common} />;
       default:
-        return <div className="p-3 text-sm text-muted-foreground">Unknown widget</div>
+        return (
+          <div className="p-3 text-sm text-muted-foreground">
+            Unknown widget
+          </div>
+        );
     }
   }
 
@@ -118,7 +146,7 @@ export function WidgetGrid({ pageSlug }: WidgetGridProps) {
     lg: layoutItems,
     md: layoutItems,
     sm: layoutItems,
-  }
+  };
 
   return (
     <div className="relative" ref={containerRef}>
@@ -206,7 +234,7 @@ export function WidgetGrid({ pageSlug }: WidgetGridProps) {
                       <SelectValue placeholder="Choose a database..." />
                     </SelectTrigger>
                     <SelectContent>
-                      {databasesData?.databases.map((db: any) => (
+                      {databasesData?.databases.map((db: NotionDatabase) => (
                         <SelectItem key={db.id} value={db.id}>
                           <div className="flex items-center gap-2">
                             {db.icon && <span>{db.icon}</span>}
@@ -236,12 +264,16 @@ export function WidgetGrid({ pageSlug }: WidgetGridProps) {
               </div>
             )}
 
-            <Button onClick={handleAddWidget} disabled={!newTitle.trim()} className="w-full">
+            <Button
+              onClick={handleAddWidget}
+              disabled={!newTitle.trim()}
+              className="w-full"
+            >
               Add
             </Button>
           </div>
         </DialogContent>
       </Dialog>
     </div>
-  )
+  );
 }

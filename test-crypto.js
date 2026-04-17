@@ -1,4 +1,4 @@
-const crypto = require('crypto');
+const crypto = await import("crypto");
 
 const ALGORITHM = "aes-256-gcm";
 const KEY_LENGTH = 32;
@@ -16,7 +16,11 @@ function encrypt(plaintext, hexKey) {
     cipher.final(),
   ]);
   const authTag = cipher.getAuthTag();
-  return [iv.toString("hex"), authTag.toString("hex"), encrypted.toString("hex")].join(":");
+  return [
+    iv.toString("hex"),
+    authTag.toString("hex"),
+    encrypted.toString("hex"),
+  ].join(":");
 }
 
 function decrypt(ciphertext, hexKey) {
@@ -34,7 +38,10 @@ function decrypt(ciphertext, hexKey) {
 }
 
 const key = "aa7ce4da9f49a72f803f5be911be07213666cc42134b6fb23e26b3537c4de563";
-const data = JSON.stringify({ username: "test@example.com", password: "password123" });
+const data = JSON.stringify({
+  username: "test@example.com",
+  password: "password123",
+});
 
 try {
   console.log("Original:", data);

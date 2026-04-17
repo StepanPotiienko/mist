@@ -1,85 +1,115 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { ExternalLink, Clock, MapPin, FileText, Tag, Folder } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { SOURCE_LABELS } from "@/types/calendar"
-import type { UnifiedEvent } from "@/types/calendar"
+import { useState } from "react";
+import {
+  ExternalLink,
+  Clock,
+  MapPin,
+  FileText,
+  Tag,
+  Folder,
+} from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { SOURCE_LABELS } from "@/types/calendar";
+import type { UnifiedEvent } from "@/types/calendar";
 
 interface EventCardProps {
-  event: UnifiedEvent
-  compact?: boolean
+  event: UnifiedEvent;
+  compact?: boolean;
 }
 
 function formatDuration(start: Date, end: Date): string {
-  const mins = Math.round((end.getTime() - start.getTime()) / 60000)
-  if (mins < 60) return `${mins}m`
-  const h = Math.floor(mins / 60)
-  const m = mins % 60
-  return m ? `${h}h ${m}m` : `${h}h`
+  const mins = Math.round((end.getTime() - start.getTime()) / 60000);
+  if (mins < 60) return `${mins}m`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m ? `${h}h ${m}m` : `${h}h`;
 }
 
 function formatDateRange(event: UnifiedEvent): string {
   if (event.allDay) {
     const startStr = event.start.toLocaleDateString("en-US", {
+      minute: "2-digit",
+      hour: "2-digit",
       weekday: "long",
       month: "long",
       day: "numeric",
       year: "numeric",
-    })
+    });
     if (event.end) {
-      const endAdj = new Date(event.end)
+      const endAdj = new Date(event.end);
       if (event.endIsExclusive !== false) {
         // iCal all-day end is exclusive (day-after-last) — subtract 1 for display
-        endAdj.setDate(endAdj.getDate() - 1)
+        endAdj.setDate(endAdj.getDate() - 1);
       }
-      // Only show a range if end is actually a different day from start
       if (
         endAdj.getFullYear() !== event.start.getFullYear() ||
         endAdj.getMonth() !== event.start.getMonth() ||
-        endAdj.getDate() !== event.start.getDate()
+        endAdj.getDate() !== event.start.getDate() ||
+        endAdj.getHours() !== event.start.getHours() ||
+        endAdj.getMinutes() !== event.start.getMinutes()
       ) {
         const endStr = endAdj.toLocaleDateString("en-US", {
+          minute: "2-digit",
+          hour: "2-digit",
           weekday: "long",
           month: "long",
           day: "numeric",
           year: "numeric",
-        })
-        return `${startStr} – ${endStr}`
+        });
+        return `${startStr} – ${endStr}`;
       }
     }
-    return startStr
+    return startStr;
   }
 
   const dateStr = event.start.toLocaleDateString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
     weekday: "long",
     month: "long",
     day: "numeric",
     year: "numeric",
-  })
-  const startTime = event.start.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+  });
+  const startTime = event.start.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 
-  if (!event.end) return `${dateStr}\n${startTime}`
+  if (!event.end) return `${dateStr}\n${startTime}`;
 
-  const endTime = event.end.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-  const duration = formatDuration(event.start, event.end)
-  return `${dateStr}\n${startTime} – ${endTime} (${duration})`
+  const endTime = event.end.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const duration = formatDuration(event.start, event.end);
+  return `${dateStr}\n${startTime} – ${endTime} (${duration})`;
 }
 
 export function EventCard({ event, compact = false }: EventCardProps) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(false);
 
   const timeStr = event.allDay
     ? "All day"
-    : event.start.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    : event.start.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
 
-  const dateRange = formatDateRange(event)
+  const dateRange = formatDateRange(event);
 
   // Obsidian note path is encoded in the id as "obsidian-{path}"
   const obsidianPath =
-    event.source === "obsidian" ? event.id.replace(/^obsidian-/, "") : undefined
+    event.source === "obsidian"
+      ? event.id.replace(/^obsidian-/, "")
+      : undefined;
 
   return (
     <>
@@ -99,7 +129,7 @@ export function EventCard({ event, compact = false }: EventCardProps) {
           className="group flex w-full items-start gap-2 rounded-lg border border-border bg-card p-3 text-left hover:bg-accent/50 transition-colors"
         >
           <div
-            className="mt-0.5 h-3 w-1 flex-shrink-0 rounded-full"
+            className="mt-0.5 h-3 w-1 shrink-0 rounded-full"
             style={{ backgroundColor: event.color }}
           />
           <div className="flex-1 min-w-0">
@@ -108,7 +138,7 @@ export function EventCard({ event, compact = false }: EventCardProps) {
           </div>
           <Badge
             variant="outline"
-            className="text-[10px] flex-shrink-0"
+            className="text-[10px] shrink-0"
             style={{ borderColor: event.color, color: event.color }}
           >
             {SOURCE_LABELS[event.source]}
@@ -121,7 +151,7 @@ export function EventCard({ event, compact = false }: EventCardProps) {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 pr-6">
               <span
-                className="inline-block h-3 w-3 rounded-full flex-shrink-0"
+                className="inline-block h-3 w-3 rounded-full shrink-0"
                 style={{ backgroundColor: event.color }}
               />
               <span className="leading-snug">{event.title}</span>
@@ -131,7 +161,10 @@ export function EventCard({ event, compact = false }: EventCardProps) {
           <div className="space-y-3 text-sm">
             {/* Source + calendar/database name */}
             <div className="flex items-center gap-2 flex-wrap">
-              <Badge variant="outline" style={{ borderColor: event.color, color: event.color }}>
+              <Badge
+                variant="outline"
+                style={{ borderColor: event.color, color: event.color }}
+              >
                 {SOURCE_LABELS[event.source]}
               </Badge>
               {event.calendarName && (
@@ -144,14 +177,16 @@ export function EventCard({ event, compact = false }: EventCardProps) {
 
             {/* Date / time */}
             <div className="flex gap-2">
-              <Clock className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
-              <span className="text-muted-foreground whitespace-pre-line">{dateRange}</span>
+              <Clock className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+              <span className="text-muted-foreground whitespace-pre-line">
+                {dateRange}
+              </span>
             </div>
 
             {/* Status (Notion select/status field) */}
             {event.status && (
               <div className="flex items-center gap-2">
-                <Tag className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                <Tag className="h-4 w-4 text-muted-foreground shrink-0" />
                 <span className="text-muted-foreground">{event.status}</span>
               </div>
             )}
@@ -159,7 +194,7 @@ export function EventCard({ event, compact = false }: EventCardProps) {
             {/* Location */}
             {event.location && (
               <div className="flex gap-2">
-                <MapPin className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                <MapPin className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
                 <span className="text-muted-foreground">{event.location}</span>
               </div>
             )}
@@ -167,7 +202,7 @@ export function EventCard({ event, compact = false }: EventCardProps) {
             {/* Description / notes */}
             {event.description && (
               <div className="flex gap-2">
-                <FileText className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                <FileText className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
                 <span className="text-muted-foreground whitespace-pre-wrap line-clamp-6">
                   {event.description}
                 </span>
@@ -177,7 +212,7 @@ export function EventCard({ event, compact = false }: EventCardProps) {
             {/* Obsidian note path */}
             {obsidianPath && (
               <div className="flex gap-2">
-                <FileText className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                <FileText className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
                 <span className="text-muted-foreground text-xs font-mono break-all">
                   {obsidianPath}
                 </span>
@@ -199,5 +234,5 @@ export function EventCard({ event, compact = false }: EventCardProps) {
         </DialogContent>
       </Dialog>
     </>
-  )
+  );
 }

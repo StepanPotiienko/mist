@@ -1,16 +1,17 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { CheckCircle2, Circle, ExternalLink, AlertCircle, Calendar } from "lucide-react"
+import { CheckCircle2, Circle, ExternalLink, AlertCircle, Calendar, FolderOpen } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
 import { useSettings } from "@/stores/settings"
 import { Switch } from "@/components/ui/switch"
+import { ThemeSelector } from "@/components/theme/ThemeSelector"
 
 interface Integration {
   key: string
@@ -68,9 +69,38 @@ export function SettingsContent() {
   const [applePass, setApplePass] = useState("")
 
   // Obsidian
+  const [obsidianMethod, setObsidianMethod] = useState<"filesystem" | "rest-api">("filesystem")
+  const [obsidianVaultPath, setObsidianVaultPath] = useState("")
   const [obsidianKey, setObsidianKey] = useState("")
   const [obsidianUrl, setObsidianUrl] = useState("http://localhost:27123")
+  const [pickingVault, setPickingVault] = useState(false)
   const { selectedAppleCalendars, setSelectedAppleCalendars } = useSettings()
+
+  // Load existing obsidian config on mount
+  useEffect(() => {
+    fetch("/api/auth/obsidian")
+      .then((r) => r.json())
+      .then((data: { configured?: boolean; method?: string; vaultPath?: string; hasApiUrl?: boolean }) => {
+        if (!data.configured) return
+        if (data.method === "rest-api") setObsidianMethod("rest-api")
+        else setObsidianMethod("filesystem")
+        if (data.vaultPath) setObsidianVaultPath(data.vaultPath)
+        if (data.hasApiUrl) setObsidianUrl("http://localhost:27123")
+        if (data.method) setStatuses((s) => ({ ...s, obsidian: "saved" }))
+      })
+      .catch(() => {})
+  }, [])
+
+  async function pickVaultFolder() {
+    setPickingVault(true)
+    try {
+      const res = await fetch("/api/obsidian/pick-vault")
+      const data = await res.json() as { vaultPath?: string; cancelled?: boolean; error?: string }
+      if (data.vaultPath) setObsidianVaultPath(data.vaultPath)
+    } finally {
+      setPickingVault(false)
+    }
+  }
 
   const { data: appleCalendarsData } = useQuery({
     queryKey: ["apple", "calendars"],
@@ -132,13 +162,21 @@ export function SettingsContent() {
     setStatuses((s) => ({ ...s, obsidian: "saving" }))
     setErrors((e) => ({ ...e, obsidian: "" }))
     try {
+      if (obsidianMethod === "filesystem" && !obsidianVaultPath.trim()) {
+        setStatuses((s) => ({ ...s, obsidian: "error" }))
+        setErrors((e) => ({ ...e, obsidian: "Please select a vault folder first." }))
+        return
+      }
+
+      const body =
+        obsidianMethod === "filesystem"
+          ? { method: "filesystem", vaultPath: obsidianVaultPath.trim() }
+          : { method: "rest-api", apiKey: obsidianKey.trim(), apiUrl: obsidianUrl.trim() }
+
       const res = await fetch("/api/auth/obsidian", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          apiKey: obsidianKey.trim(), 
-          apiUrl: obsidianUrl.trim() 
-        }),
+        body: JSON.stringify(body),
       })
       if (!res.ok) {
         const data = await res.json() as { error?: string }
@@ -165,6 +203,19 @@ export function SettingsContent() {
 
   return (
     <div className="max-w-2xl space-y-6">
+      <div>
+        <h2 className="text-2xl font-bold tracking-tight">Settings</h2>
+        <p className="text-muted-foreground mt-1">
+          Manage your appearance and integrations.
+        </p>
+      </div>
+
+      <Separator />
+
+      <ThemeSelector />
+
+      <Separator />
+
       <div>
         <h2 className="text-2xl font-bold tracking-tight">Integrations</h2>
         <p className="text-muted-foreground mt-1">
@@ -383,46 +434,87 @@ export function SettingsContent() {
                 </Badge>
               )}
             </CardTitle>
-            <CardDescription>
-              Read your vault notes via the Local REST API plugin.
-            </CardDescription>
+            <CardDescription>Read your vault notes directly — no plugin required.</CardDescription>
           </div>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="space-y-1">
-            <Label htmlFor="obs-url">API URL</Label>
-            <Input
-              id="obs-url"
-              value={obsidianUrl}
-              onChange={(e) => setObsidianUrl(e.target.value)}
-              placeholder="http://localhost:27123"
-            />
+        <CardContent className="space-y-4">
+          {/* Method toggle */}
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant={obsidianMethod === "filesystem" ? "default" : "outline"}
+              onClick={() => setObsidianMethod("filesystem")}
+              className="flex-1"
+            >
+              File System
+              <span className="ml-1.5 text-xs opacity-70">(recommended)</span>
+            </Button>
+            <Button
+              size="sm"
+              variant={obsidianMethod === "rest-api" ? "default" : "outline"}
+              onClick={() => setObsidianMethod("rest-api")}
+              className="flex-1"
+            >
+              Local REST API
+            </Button>
           </div>
-          <div className="space-y-1">
-            <Label htmlFor="obs-key">API Key (optional)</Label>
-            <Input
-              id="obs-key"
-              type="password"
-              value={obsidianKey}
-              onChange={(e) => setObsidianKey(e.target.value)}
-              placeholder="From plugin settings"
-            />
-          </div>
-          <Button
-            onClick={saveObsidian}
-            disabled={statuses.obsidian === "saving"}
-          >
+
+          {obsidianMethod === "filesystem" ? (
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <Label>Vault Folder</Label>
+                <Button
+                  variant="outline"
+                  className="w-full justify-start gap-2 font-normal"
+                  onClick={pickVaultFolder}
+                  disabled={pickingVault}
+                >
+                  <FolderOpen className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <span className={obsidianVaultPath ? "text-foreground truncate" : "text-muted-foreground"}>
+                    {pickingVault ? "Opening…" : obsidianVaultPath || "Choose vault folder…"}
+                  </span>
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Obsidian does not need to be running. Notes update automatically when files change.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <Label htmlFor="obs-url">API URL</Label>
+                <Input
+                  id="obs-url"
+                  value={obsidianUrl}
+                  onChange={(e) => setObsidianUrl(e.target.value)}
+                  placeholder="http://localhost:27123"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="obs-key">API Key (optional)</Label>
+                <Input
+                  id="obs-key"
+                  type="password"
+                  value={obsidianKey}
+                  onChange={(e) => setObsidianKey(e.target.value)}
+                  placeholder="From plugin settings"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Requires the &quot;Local REST API&quot; plugin (by coddingtonbear) and Obsidian running in the background.
+              </p>
+            </div>
+          )}
+
+          <Button onClick={saveObsidian} disabled={statuses.obsidian === "saving"}>
             {statuses.obsidian === "saving" ? "Saving…" : "Save"}
           </Button>
+
           {errors.obsidian && (
             <p className="text-sm text-destructive flex items-center gap-1">
               <AlertCircle className="h-3 w-3" /> {errors.obsidian}
             </p>
           )}
-          <p className="text-xs text-muted-foreground">
-            In Obsidian: Settings → Community Plugins → &quot;Local REST API&quot; (by coddingtonbear) → Install &amp; Enable.
-            Keep Obsidian running while using Mist.
-          </p>
         </CardContent>
       </Card>
 

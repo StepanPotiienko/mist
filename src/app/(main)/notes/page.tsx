@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react"
 import { useQuery } from "@tanstack/react-query"
+import { useObsidianSync } from "@/hooks/useObsidianSync"
 import { Search, ArrowUpDown } from "lucide-react"
 import { TopBar } from "@/components/shared/TopBar"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -21,6 +22,8 @@ import { NoteModal } from "@/components/notes/NoteModal"
 type SortKey = "newest" | "oldest" | "az" | "za"
 
 export default function NotesPage() {
+  useObsidianSync()
+
   const { data, isLoading, error } = useQuery({
     queryKey: ["obsidian", "notes", "all"],
     queryFn: () =>
